@@ -18,9 +18,12 @@ No generator covers Nebius, so Modelplane pins the whole cloud half by
 hand, in the same shape a generator emits. Where a component also
 appears on a generated cloud, this file states the same pin, so one
 review moves both halves when a version changes - regenerate, then
-mirror the shared pins here.
+mirror the shared pins here. The DCGM exporter's metrics CSV goes one
+step further: rather than restating it, this file imports it from the
+shared generated/aicr/dcgm.py, as civo.py does.
 """
 
+from function.stacks.clouds.generated.aicr.dcgm import DCGM_METRICS_CSV
 from function.stacks.components import Chart, Component
 
 # DRA drivers this cloud supports that arrive outside the serving
@@ -161,6 +164,47 @@ COMPONENTS: list[Component] = [
         values={
             "gpuResourcesEnabledOverride": True,
             "resources": {"computeDomains": {"enabled": False}},
+        },
+    ),
+    # Exports DCGM fields for the collector's modelplane-gpu job, which
+    # keeps pods named .*dcgm.* with a port named metrics. Without this every
+    # modelplane_gpu_* series is empty. DCGM runs embedded (the chart
+    # default). The counters are the generated clouds' list, not the
+    # chart's shorter default, so Nebius exports the same DCGM fields as
+    # EKS, GKE, AKS and Civo. The node terms are the DRA kubelet plugin's PCI
+    # terms: Nebius GPU nodes carry pci-0302_10de but not pci-10de. The
+    # collector finds the pod itself, so no ServiceMonitor.
+    Chart(
+        key="dcgm-exporter",
+        release="mp-dcgm-exporter",
+        namespace="dcgm-exporter",
+        chart="dcgm-exporter",
+        repository="https://nvidia.github.io/dcgm-exporter/helm-charts",
+        version="4.8.4",
+        values={
+            "serviceMonitor": {"enabled": False},
+            "customMetrics": DCGM_METRICS_CSV,
+            "tolerations": [
+                {
+                    "key": "nvidia.com/gpu",
+                    "operator": "Exists",
+                    "effect": "NoSchedule",
+                },
+            ],
+            "affinity": {
+                "nodeAffinity": {
+                    "requiredDuringSchedulingIgnoredDuringExecution": {
+                        "nodeSelectorTerms": [
+                            {"matchExpressions": [{"key": key, "operator": "In", "values": ["true"]}]}
+                            for key in (
+                                "feature.node.kubernetes.io/pci-10de.present",
+                                "feature.node.kubernetes.io/pci-0302_10de.present",
+                                "feature.node.kubernetes.io/pci-0300_10de.present",
+                            )
+                        ],
+                    },
+                },
+            },
         },
     ),
 ]

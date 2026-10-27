@@ -462,6 +462,22 @@ DCGM_FI_PROF_PIPE_FP16_ACTIVE, gauge, Ratio of cycles the fp16 pipes are active 
 """
 
 
+def test_nebius_dcgm_exporter() -> None:
+    """Nebius's dcgm-exporter exports the generated clouds' DCGM fields.
+
+    Nebius installs NVIDIA's standalone dcgm-exporter chart rather than the
+    GPU Operator, so the CSV goes in the chart's customMetrics rather than
+    dcgmExporter.config.data. Left unset, the chart falls back to its own
+    shorter default list and Nebius silently exports fewer fields than every
+    other cloud. Compared against the same literal as Civo's cases, so a
+    generator-moved CSV fails here until a human confirms the change.
+    """
+    joined = stacks.join("Nebius", "Standard")
+    exporter = next(c for c in joined if isinstance(c, stacks.Chart) and c.key == "dcgm-exporter")
+    assert exporter.values is not None
+    assert exporter.values["customMetrics"] == _DCGM_METRICS_CSV
+
+
 # Each case's input is the real joined Civo stack rather than a literal one.
 # The transform finds the gpu-operator and DRA driver charts by key, and where
 # a key matches nothing it rewrites nothing, without complaint. Only the real
