@@ -184,6 +184,10 @@ COMPONENTS: list[Component] = [
         values={
             "serviceMonitor": {"enabled": False},
             "customMetrics": DCGM_METRICS_CSV,
+            # Attribute each GPU's series to the pod holding it. Nebius GPUs
+            # are allocated through DRA, which the exporter only maps back to
+            # pods with this set; the chart adds the RBAC it needs.
+            "kubernetesDRA": {"enabled": True},
             "tolerations": [
                 {
                     "key": "nvidia.com/gpu",
@@ -191,6 +195,9 @@ COMPONENTS: list[Component] = [
                     "effect": "NoSchedule",
                 },
             ],
+            # The first three nodeSelectorTerms of dra-driver-nvidia-gpu
+            # v0.5.0's kubeletPlugin affinity. Recheck them when that chart
+            # moves.
             "affinity": {
                 "nodeAffinity": {
                     "requiredDuringSchedulingIgnoredDuringExecution": {
